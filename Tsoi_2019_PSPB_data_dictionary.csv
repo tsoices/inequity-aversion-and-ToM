@@ -1,0 +1,89 @@
+﻿Variable,Description
+subject.number,Subject ID
+ToM/ControlCondition,"Manipulation. levels: ToM, Control"
+AI/DICondition,"Inequity type. levels: AI (advantageous inequity), DI (disadvantageous inequity)"
+success,"Success. levels: S (successful), NS (not successful)"
+location,"Testing Site. levels: BC (Boston Common), AP (Artesani Park)"
+actor.age.years,Decider's age (year)
+actor.age.months,Decider's age (months [0 - 12])
+actor.age.group,"Decider's age group. levels: below, 6&7, 8&9, over"
+actor.age.continuous,Decider's age in years
+actor.age.continuous.months,Decider's age in months
+actor.gender,"Decider's gender. levels: female, male"
+recipient.age.years,Recipient's age (year)
+recipient.age.months,Recipient's age (months [0 - 12])
+recipient.age.group,"Recipient's age group. levels: below, 6&7, 8&9, over"
+recipient.age.continuous,Recipient's age in years
+recipient.age.continuous.months,Recipient's age in months
+recipient.gender,"Recipient's gender. levels: female, male"
+experimenter,Experimenter's initials
+assent.actor,"Did decider provide verbal assent? levels: yes, no"
+assent.recipient,"Did recipient provide verbal assent? levels: yes, no"
+likes.skittles.actor,"Does decider like Skittles (resource in the study)? levels: yes, no"
+likes.skittles.recipient,"Does receiver like Skittles (resource in the study)? levels: yes, no"
+handle.demonstrated.first,"Which color handle was demonstrated first? levels: green, red"
+went.over.three.rules,"Did experimenter go over the three rules? levels: yes, no"
+practice.1v1,"Did the decider accept or reject the 1-1 distribution? levels: 1=accept, 0=reject"
+practice.order.enter.0.if.0foractor.vs.1recipfirst.enter1.if.1foractor.vs.0recipfirst,What was the order presented for the rest of the practice trials? levels: 0=0 for decider vs. 1 for recipient; 1=1 for decider vs. 0 for recipient
+practice.0.for.actor.1.for.recip,"Did the decider accept or reject the 0-1 distribution? levels: 1=accept, 0=reject"
+practice.1.for.actor.0.for.recip,"Did the decider accept or reject the 1-0 distribution? levels: 1=accept, 0=reject"
+was.there.extra.practice,"Was an extra trial needed? levels: yes, no"
+which.handle.was.practiced.in.extra.trial,"Which color handle was practiced on the extra trial? levels: green, red"
+actor.check.1,"Whether actor gets the first check question spontaneously correct. levels: spontaneously correct, not spontaneously correct"
+recipient.check.1,"Whether recipient gets the first check question spontaneously correct. levels: spontaneously correct, not spontaneously correct"
+actor.check.2,"Whether actor gets the 2nd check question spontaneously correct (ToM condition only). levels: spontaneously correct, not spontaneously correct"
+recipient.check.2,"Whether recipient gets the 2nd check question spontaneously correct (ToM condition only). levels: spontaneously correct, not spontaneously correct"
+comp.check.placement (0=4th practice trial; 1=1st practice trial),"Whether check questions were presented after practice trials or before practice trials. levels: 0, 1"
+block1.t1.dist,"Distribution. levels: e (equal), ai (advantageous inequity), di (disadvantageous inequity)"
+block1.t1.dec,"Decision. levels: 0=reject, 1=accept"
+block1.t2.dist,"Distribution. levels: e (equal), ai (advantageous inequity), di (disadvantageous inequity)"
+block1.t2.dec,"Decision. levels: 0=reject, 1=accept"
+block1.t3.dist,"Distribution. levels: e (equal), ai (advantageous inequity), di (disadvantageous inequity)"
+block1.t3.dec,"Decision. levels: 0=reject, 1=accept"
+block1.t4.dist,"Distribution. levels: e (equal), ai (advantageous inequity), di (disadvantageous inequity)"
+block1.t4.dec,"Decision. levels: 0=reject, 1=accept"
+block1.t5.dist,"Distribution. levels: e (equal), ai (advantageous inequity), di (disadvantageous inequity)"
+block1.t5.dec,"Decision. levels: 0=reject, 1=accept"
+block1.t6.dist,"Distribution. levels: e (equal), ai (advantageous inequity), di (disadvantageous inequity)"
+block1.t6.dec,"Decision. levels: 0=reject, 1=accept"
+block2.t1.dist,"Distribution. levels: e (equal), ai (advantageous inequity), di (disadvantageous inequity)"
+block2.t1.dec,"Decision. levels: 0=reject, 1=accept"
+block2.t2.dist,"Distribution. levels: e (equal), ai (advantageous inequity), di (disadvantageous inequity)"
+block2.t2.dec,"Decision. levels: 0=reject, 1=accept"
+block2.t3.dist,"Distribution. levels: e (equal), ai (advantageous inequity), di (disadvantageous inequity)"
+block2.t3.dec,"Decision. levels: 0=reject, 1=accept"
+block2.t4.dist,"Distribution. levels: e (equal), ai (advantageous inequity), di (disadvantageous inequity)"
+block2.t4.dec,"Decision. levels: 0=reject, 1=accept"
+block2.t5.dist,"Distribution. levels: e (equal), ai (advantageous inequity), di (disadvantageous inequity)"
+block2.t5.dec,"Decision. levels: 0=reject, 1=accept"
+block2.t6.dist,"Distribution. levels: e (equal), ai (advantageous inequity), di (disadvantageous inequity)"
+block2.t6.dec,"Decision. levels: 0=reject, 1=accept"
+block2.extra.trials,Was an extra trial run?
+Why red when unequal,transcribed from video/paper
+Why green when unequal,transcribed from video/paper
+RMET.score,Score on the RMET
+A or B?,"Version of Griffith Empathy Measure (A or B, denoting randomization of items). levels: 1 = A, 0 = B"
+Q1,Response on item 1 of Griffith Empathy Measure
+Q2,Response on item 2 of Griffith Empathy Measure
+Q3,Response on item 3 of Griffith Empathy Measure
+Q4,Response on item 4 of Griffith Empathy Measure
+Q5,Response on item 5 of Griffith Empathy Measure
+Q6,Response on item 6 of Griffith Empathy Measure
+Q7,Response on item 7 of Griffith Empathy Measure
+Q8,Response on item 8 of Griffith Empathy Measure
+Q9,Response on item 9 of Griffith Empathy Measure
+Q10,Response on item 10 of Griffith Empathy Measure
+Q11,Response on item 11 of Griffith Empathy Measure
+Q12,Response on item 12 of Griffith Empathy Measure
+Q13,Response on item 13 of Griffith Empathy Measure
+Q14,Response on item 14 of Griffith Empathy Measure
+Q15,Response on item 15 of Griffith Empathy Measure
+Q16,Response on item 16 of Griffith Empathy Measure
+Q17,Response on item 17 of Griffith Empathy Measure
+Q18,Response on item 18 of Griffith Empathy Measure
+Q19,Response on item 19 of Griffith Empathy Measure
+Q20,Response on item 20 of Griffith Empathy Measure
+Q21,Response on item 21 of Griffith Empathy Measure
+Q22,Response on item 22 of Griffith Empathy Measure
+Q23,Response on item 23 of Griffith Empathy Measure
+Q.aggregate,Total score of Griffith Empathy Measure.

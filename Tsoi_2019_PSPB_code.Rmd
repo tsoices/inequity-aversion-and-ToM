@@ -1,0 +1,1162 @@
+---
+title: "Individual differences in theory of mind predict inequity aversion in children"
+author: "Lily Tsoi, ltsoi@princeton.edu"
+output:
+  rmdformats::readthedown:
+    code_folding: hide
+    highlight: tango
+date: '`r format(Sys.time(), "%B %d, %Y")`'
+---
+
+<style>
+
+p{
+    font-size:16px;
+    line-height:24px;
+    margin:0px 0px 12px 0px;
+}
+
+h1,h2,h3,h4,h5,h6,legend{
+    font-family: Arial,Arial,Arial,sans-serif,sans-serif;
+    font-weight:600;
+    color: #209f94;
+}
+
+#table-of-contents h2{
+    z-index:200;
+    background-color:#209f94;
+    text-align:center;
+    padding:0.809em;
+    display:block;
+    color:#fcfcfc;
+    font-size: 100%;
+    margin-top: 0px;
+    margin-bottom:0.809em;
+}
+#main a {
+    background-image: linear-gradient(180deg,#209f94,#209f94);
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    background-position: 0 2em;
+    color: #209f94;
+    font-weight: 300;
+    padding: .125em 1px 0 1px;
+    transition: background-position .15s, color .15s;
+}
+a:focus, a:hover {
+
+    color: #209f94;
+    text-decoration: underline;
+
+}
+a {
+    color: #209f94;
+    text-decoration: none;
+    cursor: pointer;
+
+}
+
+</style>
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(eval=TRUE, results="show", warning=FALSE, message=FALSE, echo=TRUE, strip.white=TRUE)
+```
+
+# Notes
+
+This page provides code and outputs found for "Individual differences in theory of mind predict inequity aversion in children".
+
+Reference:
+
+Tsoi, L., & McAuliffe, K. (2019). Individual Differences in Theory of Mind Predict Inequity Aversion in Children. Personality and Social Psychology Bulletin. https://doi.org/10.1177/0146167219867957
+
+# Packages
+
+```{r, warning=FALSE, message=FALSE, results="hide"}
+packages <- c("tidyverse", "lme4", "optimx", "binom", "multcomp", "effects", "texreg", "Rmisc", "lsmeans")
+packages_new <- packages[!(packages %in% installed.packages()[,"Package"])]
+if(length(packages_new)) install.packages(packages_new)
+lapply(packages,library,character.only=T)
+```
+
+# Data organization
+
+## Import and organize current data
+
+```{r, warning=FALSE}
+
+# [1] import data
+dir_path = getwd()
+df.orig <- read.csv(paste0(dir_path, "/", "Tsoi_2019_PSPB_data.csv"), na.strings = c(".", ""))
+
+# [2] make sure that variables are read as they should be (e.g., factor as factor, numeric as numeric)
+
+# correct variables that should be numeric but R may think are factors
+names.numeric <-
+  c(
+    'actor.age.years',
+    'actor.age.months',
+    'recipient.age.years',
+    'recipient.age.months',
+    'block1.t1.dec',
+    'block1.t2.dec',
+    'block1.t3.dec',
+    'block1.t4.dec',
+    'block1.t5.dec',
+    'block1.t6.dec',
+    'block2.t1.dec',
+    'block2.t2.dec',
+    'block2.t3.dec',
+    'block2.t4.dec',
+    'block2.t5.dec',
+    'block2.t6.dec',
+    'RMET.score',
+    'Q1',
+    'Q2',
+    'Q3',
+    'Q4',
+    'Q5',
+    'Q6',
+    'Q7',
+    'Q8',
+    'Q9',
+    'Q10',
+    'Q11',
+    'Q12',
+    'Q13',
+    'Q14',
+    'Q15',
+    'Q16',
+    'Q17',
+    'Q18',
+    'Q19',
+    'Q20',
+    'Q21',
+    'Q22',
+    'Q23',
+    'practice.1v1',
+    'practice.0.for.actor.1.for.recip',
+    'practice.1.for.actor.0.for.recip'
+  )
+df.orig[,names.numeric] <- lapply(df.orig[,names.numeric] , as.character)
+df.orig[,names.numeric] <- lapply(df.orig[,names.numeric] , as.numeric) # converting to character and then to numeric works better
+
+# correct variables that should be factors but are denoted by #s
+names.factor <- c('subject.number','practice.order.enter.0.if.0foractor.vs.1recipfirst.enter1.if.1foractor.vs.0recipfirst', 'A.or.B.')
+df.orig[,names.factor] <- lapply(df.orig[,names.factor] , as.factor)
+
+# rename more columns
+names(df.orig)[names(df.orig)=='AI.DICondition'] <- "ai.di"
+names(df.orig)[names(df.orig)=='ToM.ControlCondition'] <- "tom.con"
+
+# [3] subset the data to successes only (people who passed comprehension checks)
+df <- df.orig[grep("^S",df.orig$success),]
+df <- droplevels(df) # drop unused levels
+
+# [4] calculate scores on RMET and Griffith empathy measure
+
+# calculate aggregate score for Griffith Empathy Measure
+columns_setA <- c(2,5,8,15,17,19,20) + (which(colnames(df) == "Q1") - 1) # column indices that contain the reverse coding items
+columns_setB <- c(3,6,7,13,18,22,23) + (which(colnames(df) == "Q1") - 1) # column indices that contain the reverse coding items
+rows_setA <- which(grepl(1,df$A.or.B.))
+rows_setB <- which(grepl(0,df$A.or.B.))
+df[rows_setA,columns_setA] <- -1*df[rows_setA,columns_setA]
+df[rows_setB,columns_setB] <- -1*df[rows_setB,columns_setB]
+columns = c(which(colnames(df) == "Q1"):which(colnames(df) == "Q23")) # columns containing question items
+df$Griffith <- apply(df[,columns],1,sum) # NA = people who did not fill the questionnaire out at all or left some items blank
+
+# calculate Griffith subscores:
+columns_setA_cog <- c(2,5,8,15,17,19) + (which(colnames(df) == "Q1") - 1) # column indices that contain cognitive questions
+columns_setA_aff <- c(1,3,4,7,10,13,14,20,23) + (which(colnames(df) == "Q1") - 1) # column indices that contain affective questions
+columns_setA_both <- c(6,9,11,12,16,18,21,22) + (which(colnames(df) == "Q1") - 1) # column indices that contain both types of questions
+columns_setB_cog <- c(3,6,7,13,18,23) + (which(colnames(df) == "Q1") - 1) # column indices that contain cognitive questions
+columns_setB_aff <- c(5,8,12,14,15,16,20,21,22) + (which(colnames(df) == "Q1") - 1) # column indices that contain affective questions
+columns_setB_both <- c(1,2,4,9,10,11,17,19) + (which(colnames(df) == "Q1") - 1) # column indices that contain both types of questions
+Griffith_cog <- rep(NA,length(df))
+Griffith_aff <- rep(NA,length(df))
+Griffith_cog[rows_setA] <- apply(df[rows_setA,columns_setA_cog],1,sum)
+Griffith_cog[rows_setB] <- apply(df[rows_setB,columns_setB_cog],1,sum)
+Griffith_aff[rows_setA] <- apply(df[rows_setA,columns_setA_aff],1,sum)
+Griffith_aff[rows_setB] <- apply(df[rows_setB,columns_setB_aff],1,sum)
+df$Griffith_cog <- Griffith_cog
+df$Griffith_aff <- Griffith_aff
+rm(Griffith_cog,Griffith_aff)
+
+# remove responses to individual questions now that we have the aggregate
+df <- dplyr::select(df,-starts_with("Q"))
+
+# median split by RMET score
+RMET.median <- median(df$RMET.score, na.rm=TRUE)
+df$RMET.cat[df$RMET.score > RMET.median] <- 'high'
+df$RMET.cat[df$RMET.score < RMET.median] <- 'low'
+df$RMET.cat <- as.factor(df$RMET.cat)
+
+# median split by RMET score for each age group
+RMET.median.young <- median(df$RMET.score[df$actor.age.group == '6&7'], na.rm=TRUE)
+RMET.median.old <- median(df$RMET.score[df$actor.age.group == '8&9'], na.rm=TRUE)
+df$RMET.cat.age[df$actor.age.group == '6&7' & df$RMET.score > RMET.median.young] <- 'high'
+df$RMET.cat.age[df$actor.age.group == '6&7' & df$RMET.score < RMET.median.young] <- 'low'
+df$RMET.cat.age[df$actor.age.group == '8&9' & df$RMET.score > RMET.median.old] <- 'high'
+df$RMET.cat.age[df$actor.age.group == '8&9' & df$RMET.score < RMET.median.old] <- 'low'
+
+# [5] scale variables
+
+# scale age
+df$actor.age.continuous.scaled <- scale(df$actor.age.continuous)
+# scale RMET.score and Q.real.aggregate [Griffith empathy measure]
+df$RMET.score.scaled <- scale(df$RMET.score)
+df$Griffith.scaled <- scale(df$Griffith)
+df$Griffith_cog.scaled <- scale(df$Griffith_cog)
+df$Griffith_aff.scaled <- scale(df$Griffith_aff)
+# create score combining RMET and Griffith empathy measure
+df$RMET_Griffith <- rowMeans(df[c('RMET.score.scaled', 'Griffith.scaled')]) #combined
+df$RMET_Griffith_cog <- rowMeans(df[c('RMET.score.scaled', 'Griffith_cog.scaled')]) #combined
+df$RMET_Griffith_aff <- rowMeans(df[c('RMET.score.scaled', 'Griffith_aff.scaled')]) #combined
+
+# [6] convert to long format
+df.long <- df %>% 
+  gather(block.dist, trial.type, ends_with(".dist")) %>% dplyr::select(-contains(".dec")) %>%
+  bind_cols(df %>% gather(block.dec, dec, ends_with(".dec")) %>% dplyr::select("dec")) 
+df.long$trial <- rep(c(1:12),each = dim(df)[1])
+# as factor:
+df.long$eq.ineq <- as.factor(regmatches(df.long$trial.type,regexpr(".$",df.long$trial.type)))
+
+# [7] change dec from (1=accept, 0=reject) to (1=reject, 0=accept) so DV is number of rejection or no rejection (instead of basing on acceptances)
+# same with practice trials
+df.long$dec <- 1 - df.long$dec
+df.long$practice.1v1 <- 1 - df.long$practice.1v1
+df.long$practice.0.for.actor.1.for.recip <- 1 - df.long$practice.0.for.actor.1.for.recip
+df.long$practice.1.for.actor.0.for.recip <- 1 - df.long$practice.1.for.actor.0.for.recip
+
+```
+
+## Import and organize already-published dataset
+
+This dataset is only useful for comparing the effects of the ToM manipulation with a prior established baseline response.
+
+```{r}
+
+df.pub <- read.csv(paste0(dir_path, "/published_data_ai_di.csv"), sep = ",", header = TRUE, na.strings = ".")
+
+files_dist <- sapply(1:16, function(x) sprintf("t%d.dist", x))
+files_dec <- sapply(1:16, function(x) sprintf("t%d.dec", x))
+df_dec <- dplyr::select(df.pub, files_dec)
+
+df.pub.long <- df.pub %>% gather("trial", "dist", files_dist) %>%
+  dplyr::select(-ends_with("dec"))
+
+df.pub.long.dec <- df.pub %>% gather("trial", "dec", files_dec)
+
+df.pub.long$dec <- df.pub.long.dec$dec
+
+df.pub.long$trial <- gsub("[a-zA-Z.]", "", df.pub.long$trial)
+
+# create reject variable (1=reject, 0=accept)
+df.pub.long$rej <- as.factor(1 - df.pub.long$dec)
+
+# create data frame with the data we need (prop = proportion of rejections)
+df.pub.wide <- df.pub.long %>% dplyr::group_by(study, actor.id, age.group, dist, inequity) %>% dplyr::summarise(n=n(), sum = n - sum(dec), prop = sum / n)
+
+# convert to the correct class
+df.pub.long$trial = as.factor(df.pub.long$trial)
+df.pub.long$dist = as.factor(df.pub.long$dist)
+df.pub.long$dec <- as.factor(df.pub.long$dec)
+
+# subset by age groups of interest
+df.pub.long <- subset(df.pub.long, age.group == "6&7" | age.group == "8&9")
+df.pub.long <- droplevels(df.pub.long)
+
+# remove dec = NA
+df.pub.long[which(is.na(df.pub.long$dec)),] <- NA
+df.pub.wide <- na.omit(df.pub.wide)
+
+# get streamlined version of the dataset
+df.pub.sub <- df.pub.long %>% dplyr::select("inequity", "study", "actor.id", "age.group","actor.age.years", "actor.age.calc", "actor.gender", "trial", "dist", "rej")
+```
+
+## Combine old and new datasets
+
+```{r}
+# get streamlined version of the dataset
+df.pub.sub <- df.pub.long %>% dplyr::select("inequity", "actor.id","age.group","actor.age.years","actor.age.calc", "actor.gender", "trial", "dist", "rej", "study")
+df.pub.sub$study_type <- as.factor("old")
+df.pub.sub$tom.con <- as.factor("baseline")
+
+# get streamlined version of current study
+df.new.sub <- df.long %>% dplyr::select("ai.di", "subject.number", "actor.age.group", "actor.age.years", "actor.age.continuous", "actor.gender","trial","eq.ineq", "dec")
+
+df.new.sub$study <- as.factor("RMET")
+df.new.sub$study_type <- as.factor("new")
+df.new.sub$tom.con <- df.long$tom.con
+colnames(df.new.sub) <- c("inequity", "actor.id", "age.group","actor.age.years", "actor.age.calc", "actor.gender", "trial", "dist", "rej", "study", "study_type",  "tom.con")
+levels(df.new.sub$dist) <- c("eq","uneq")
+df.new.sub$dist <- as.factor(as.character(df.new.sub$dist))
+df.new.sub$trial <- as.factor(as.character(df.new.sub$trial))
+df.new.sub$rej <- as.factor(as.character(df.new.sub$rej))
+df.new.sub$actor.age.years <- as.integer(df.new.sub$actor.age.years)
+df.new.sub$actor.age.calc <- as.integer(df.new.sub$actor.age.calc * 12)
+levels(df.new.sub$actor.gender) <- c("F","M")
+
+# aggregate both study sets
+
+df.all <- bind_rows(df.pub.sub, df.new.sub)
+df.all$actor.id <- as.factor(df.all$actor.id)
+df.all$trial <- as.factor(df.all$trial)
+df.all$study <- as.factor(df.all$study)
+df.all$study_type <- as.factor(df.all$study_type)
+df.all$tom.con <- as.factor(df.all$tom.con)
+
+```
+
+# Methods
+
+## Sample descriptives
+
+```{r}
+
+df_subset <- subset(df, is.na(Griffith) != TRUE)
+by(df_subset[,c("actor.age.group", "actor.gender", "actor.age.continuous.months")], df_subset$actor.age.group, summary)
+
+```
+
+## Comparing random slope model with random intercept model
+
+```{r}
+
+### Compare full model incl. random slope with full model w/o random slope ###
+
+model123.full.w.slope <- glmer(dec ~
+                                 (eq.ineq + ai.di + tom.con + actor.age.group)^4 +
+                                 (eq.ineq + ai.di + RMET.score.scaled)^3 +
+                                 (eq.ineq + ai.di + Griffith.scaled)^3 +
+                                 (actor.age.group + RMET.score.scaled)^2 +
+                                 (actor.age.group + Griffith.scaled)^2 +
+                                 actor.gender +
+                                 (1 + eq.ineq|subject.number),
+                               data = df.long,
+                               family = binomial,
+                               control = glmerControl(optimizer = 'optimx', optCtrl = list(method = 'nlminb'))) # methods: nlminb, bobyqa
+
+model123.full.no.slope <- glmer(dec ~
+                                  (eq.ineq + ai.di + tom.con + actor.age.group)^4 +
+                                  (eq.ineq + ai.di + RMET.score.scaled)^3 +
+                                  (eq.ineq + ai.di + Griffith.scaled)^3 +
+                                  (actor.age.group + RMET.score.scaled)^2 +
+                                  (actor.age.group + Griffith.scaled)^2 +
+                                  actor.gender +
+                                  (1|subject.number),
+                                data = df.long,
+                                family = binomial,
+                                control = glmerControl(optimizer = 'optimx', optCtrl = list(method = 'nlminb'))) # methods: nlminb, bobyqa
+
+anova(model123.full.w.slope,model123.full.no.slope,test="Chisq")
+```
+
+# Results
+
+## Table 1
+
+Reduced model with all relevant two-way interactions
+
+```{r}
+
+model123.red <- glmer(dec ~
+                      eq.ineq +
+                      ai.di +
+                      tom.con +
+                      actor.age.group +
+                      RMET.score.scaled +
+                      Griffith.scaled +
+                      actor.gender +
+                      eq.ineq:ai.di +
+                      eq.ineq:tom.con +
+                      eq.ineq:RMET.score.scaled +
+                      eq.ineq:Griffith.scaled +
+                      actor.age.group:RMET.score.scaled +
+                      actor.age.group:Griffith.scaled +
+                      (1+eq.ineq|subject.number),
+                    data = df.long,
+                    family = binomial,
+                    control = glmerControl(optimizer = 'optimx', optCtrl = list(method = 'nlminb'))) # methods: nlminb, bobyqa
+
+htmlreg(list(model123.red), file = "Table_1.doc", single.row = TRUE,
+        stars = c(0.001, 0.01, 0.05, 0.10), symbol = "&#10013",
+        custom.model.names = c("Model"),
+        custom.coef.names = c("Intercept",
+                              "Distribution",
+                              "Inequity Type",
+                              "Manipulation",
+                              "Decider Age Group",
+                              "RMET Score",
+                              "Griffith Score",
+                              "Decider Gender",
+                              "Distribution x Inequity Type",
+                              "Distribution x Manipulation",
+                              "Distribution x RMET Score",
+                              "Distribution x Griffith Score",
+                              "Decider Age Group x RMET Score",
+                              "Decider Age Group x Griffith Score"),
+        custom.gof.names = c("AIC", "BIC", "Log Likelihood", 
+                             "Num. obs. (trials)", "Num. groups: ID (subjects)",
+                             "Variance: ID (Intercept)", "Variance: ID (Distribution)",
+                             "Covariance: ID (Intercept) (Distribution)"),
+        caption.above = TRUE, 
+        caption = "Table 1. Model outputs from a reduced model that includes all the two-way interactions of interest. Estimates and standard errors (s.e.) of fixed effects in Generalized Linear Mixed Models predicting children’s rejection behaviors. Baselines were set as follows: Distribution = equal, Inequity Type = AI, Manipulation = Control, Decider Age Group = 6&7, Decider Gender = female. Griffith score and RMET score were included as continuous predictors. Table also shows goodness-of-fit statistics.",
+        inline.css = FALSE, doctype = TRUE, html.tag = TRUE, 
+        head.tag = TRUE, body.tag = TRUE)
+```
+
+## Effects of the Theory of Mind Manipulation
+
+```{r}
+model123.full <- model123.full.w.slope
+
+print("test the 4-way interaction: Distribution x Inequity Type x Manipulation x Decider Age Group")
+# remove the 4-way interaction: eq.ineq * ai.di * tom.con * actor.age.group
+model123.tom.1 <- update(model123.full, . ~ . - eq.ineq:ai.di:tom.con:actor.age.group)
+anova(model123.full, model123.tom.1, test="Chisq") # to test the 4-way interaction: eq.ineq:ai.di:tom.con:actor.age.group
+
+print("Test the 3-way interaction: Distribution x Inequity Type x Manipulation")
+model123.tom.2 <- update(model123.tom.1, . ~ . - eq.ineq:ai.di:tom.con)
+anova(model123.tom.1, model123.tom.2, test="Chisq") # to test the 3-way interaction: eq.ineq:ai.di:tom.con
+
+print("Test the 2-way interaction: Distribution x Manipulation")
+# remove 3-way interactions involving eq.ineq*tom.con: eq.ineq * tom.con * actor.age.group and eq.ineq * tom.con * ai.di
+model123.tom.3 <- update(model123.tom.1, . ~ . - eq.ineq:tom.con:actor.age.group - eq.ineq:ai.di:tom.con)
+# remove the 2-way interaction: eq.ineq * tom.con
+model123.tom.4 <- update(model123.tom.3, . ~ . - eq.ineq:tom.con)
+anova(model123.tom.3, model123.tom.4, test="Chisq") # to test the 2-way interaction: eq.ineq:tom.con
+```
+
+### Figure 2. Rejections by Distribution, Inequity Type, ToM Manipulation, and Age Group
+
+```{r}
+
+df_tab <- subset(df.all, inequity == "AI")
+tab <- with(df_tab, table(rej, tom.con, age.group, dist))
+tabdf <- as.data.frame(tab)
+tabdf0 <- tabdf[tabdf$rej == "1", ]
+tabdf0$trials <- with(tabdf, as.vector(tapply(tabdf$Freq, list(tom.con, age.group, dist), sum)))
+tabCI <- with(tabdf0, binom.confint(x= Freq, n = trials, methods ="agresti-coull", tol=1e-8))
+tabCI$dist <- factor(tabdf0$dist, levels = c("eq", "uneq"), labels = c("Equal: 1-1", "Unequal: 4-1"))
+tabCI <- cbind(tabCI, tabdf0)
+colnames(tabCI) <- make.unique(names(tabCI))
+
+ggplot(tabCI, aes(y = mean, x = tom.con, fill = dist)) +
+  geom_bar(stat = "identity", position = position_dodge(), color = "black")  +
+  geom_errorbar(aes(ymin = lower, ymax = upper), position = position_dodge(.9), color = "black", width = 0.3) +
+  facet_wrap(~age.group, ncol = 2) +
+  scale_fill_manual(name = "Distribution", values=c("orange", "slategray")) + 
+  coord_cartesian(y=c(0,1)) +
+  ggtitle("Advantageous Inequity\n4 (decider) vs. 1 (recipient)") +
+  ylab ("Proportion of rejections") +
+  xlab ("Condition") +
+  scale_x_discrete("Condition", labels = c("C" = "control", "ToM" = "theory of mind")) +
+  theme_bw() +
+  theme(axis.text=element_text(size=12),
+        axis.title=element_text(size=12,face="bold"),
+        plot.title = element_text(size=12,face="bold", margin=margin(b=20), hjust=0.5),
+        axis.title.y = element_text(margin = margin(r=20)), 
+        axis.title.x = element_text(margin = margin(t=20)), 
+        legend.text=element_text(size=12),
+        legend.title=element_text(size=12,face="bold"),
+        strip.text=element_text(size=12),
+        panel.grid.major.x = element_blank(),
+        panel.grid.major.y = element_blank())
+
+df_tab <- subset(df.all, inequity == "DI")
+tab <- with(df_tab, table(rej, tom.con, age.group, dist))
+tabdf <- as.data.frame(tab)
+tabdf0 <- tabdf[tabdf$rej == "1", ]
+tabdf0$trials <- with(tabdf, as.vector(tapply(tabdf$Freq, list(tom.con, age.group, dist), sum)))
+tabCI <- with(tabdf0, binom.confint(x= Freq, n = trials, methods ="agresti-coull", tol=1e-8))
+tabCI$dist <- factor(tabdf0$dist, levels = c("eq", "uneq"), labels = c("Equal: 1-1", "Unequal: 1-4"))
+tabCI <- cbind(tabCI, tabdf0)
+colnames(tabCI) <- make.unique(names(tabCI))
+
+ggplot(tabCI, aes(y = mean, x = tom.con, fill = dist)) +
+  geom_bar(stat = "identity", position = position_dodge(), color = "black")  +
+  geom_errorbar(aes(ymin = lower, ymax = upper), position = position_dodge(.9), color = "black", width = 0.3) +
+  facet_wrap(~age.group, ncol = 2) +
+  scale_fill_manual(name = "Distribution", values=c("orange", "slategray")) + 
+  coord_cartesian(y=c(0,1)) +
+  ggtitle("Disadvantageous Inequity\n1 (decider) vs. 4 (recipient)") +
+  ylab ("Proportion of rejections") +
+  xlab ("Condition") +
+  scale_x_discrete("Condition", labels = c("C" = "control", "ToM" = "theory of mind")) +
+  theme_bw() +
+  theme(axis.text=element_text(size=12),
+        axis.title=element_text(size=12,face="bold"),
+        plot.title = element_text(size=12,face="bold", margin=margin(b=20), hjust=0.5),
+        axis.title.y = element_text(margin = margin(r=20)), 
+        axis.title.x = element_text(margin = margin(t=20)), 
+        legend.text=element_text(size=12),
+        legend.title=element_text(size=12,face="bold"),
+        strip.text=element_text(size=12),
+        panel.grid.major.x = element_blank(),
+        panel.grid.major.y = element_blank())
+
+```
+
+### Unpacking why we see a lack of interaction
+
+```{r}
+
+print("for AI only")
+
+df.long.ai = subset(df.long, ai.di == "AI")
+
+model123.1.ai <- glmer(dec ~
+                         (eq.ineq + tom.con + actor.age.group)^3 +
+                         actor.gender +
+                         (1|subject.number),
+                       data = df.long.ai,
+                       family = binomial,
+                       control = glmerControl(optimizer = 'optimx', optCtrl = list(method = 'bobyqa'))) # methods: nlminb, bobyqa
+
+model123.2.ai <- update(model123.1.ai, . ~ . -eq.ineq:tom.con:actor.age.group)
+
+lsmeans(model123.2.ai, pairwise ~ eq.ineq | tom.con * actor.age.group, adjust = "mvt")
+
+print("for DI only")
+
+df.long.di = subset(df.long, ai.di == "DI")
+
+model123.1.di <- glmer(dec ~
+                         (eq.ineq + tom.con + actor.age.group)^3 +
+                         actor.gender +
+                         (1|subject.number),
+                       data = df.long.di,
+                       family = binomial,
+                       control = glmerControl(optimizer = 'optimx', optCtrl = list(method = 'bobyqa'))) # methods: nlminb, bobyqa
+
+drop1(model123.1.di, test="Chisq")
+
+model123.2.di <- update(model123.1.di, . ~ . -eq.ineq:tom.con:actor.age.group)
+
+drop1(model123.2.di, test="Chisq")
+
+
+```
+
+
+
+## Relationship Between Inequity Aversion and RMET
+
+```{r}
+
+print("Test the 3-way interaction: Distribution x Inequity Type x RMET score")
+# remove the 3-way interaction: eq.ineq * ai.di * RMET.score.scaled
+model123.RMET.1 <- update(model123.full, . ~ . - eq.ineq:ai.di:RMET.score.scaled)
+anova(model123.full, model123.RMET.1, test="Chisq") # to test the 3-way interaction: eq.ineq:ai.di:RMET.score.scaled
+
+print("Test the 2-way interaction: Distribution x RMET score")
+# remove the 2-way interaction: eq.ineq * RMET.score.scaled
+model123.RMET.2 <- update(model123.RMET.1, . ~ . - eq.ineq:RMET.score.scaled)
+anova(model123.RMET.1, model123.RMET.2, test="Chisq") # to test the 2-way interaction: eq.ineq:RMET.score.scaled
+```
+
+### Figure 3A: Rejections by RMET score
+
+```{r, message=FALSE, warning=FALSE}
+
+# means are used to plot raw data values
+attach(df.long)
+means <- setNames(aggregate(dec, by = list(subject.number,ai.di,eq.ineq,tom.con), FUN = mean, na.rm = TRUE),
+                  c("subject.number","ai.di","eq.ineq","tom.con","mean"))
+RMET.scores <- setNames(aggregate(RMET.score, by = list(subject.number,ai.di,eq.ineq,tom.con),FUN = mean, na.rm = TRUE),
+                        c("subject.number","ai.di","eq.ineq","tom.con","RMET.score"))
+Griffith.scores <- setNames(aggregate(Griffith, by = list(subject.number,ai.di,eq.ineq,tom.con),FUN = mean, na.rm = TRUE),
+                            c("subject.number","ai.di","eq.ineq","tom.con","Griffith.score"))
+means$RMET.score <- RMET.scores$RMET.score
+means$Griffith.score <- Griffith.scores$Griffith.score
+detach(df.long)
+
+effects_RMET <- allEffects(model123.full, xlevels = list(RMET.score.scaled = seq(-4, 3, 0.3)))
+effects_RMET_df <- lapply(effects_RMET, as.data.frame)
+predicted.values.for.plot.RMET <- effects_RMET_df$`eq.ineq:ai.di:RMET.score.scaled`
+
+RMET.mean <- mean(df$RMET.score, na.rm = TRUE)
+RMET.sd <- sd(df$RMET.score, na.rm = TRUE)
+
+labels <- c(AI = "Advantageous Inequity", DI = "Disadvantageous Inequity")
+
+ggplot() +
+  geom_line(data = predicted.values.for.plot.RMET,
+            aes(x = RMET.score.scaled*RMET.sd+RMET.mean, y = fit, color = eq.ineq),
+            size = 1.5) +
+  geom_ribbon(data = predicted.values.for.plot.RMET,
+              aes(x = RMET.score.scaled*RMET.sd+RMET.mean, ymin = lower, ymax = upper, fill = eq.ineq),
+              alpha = .3, linetype = 0) +
+  geom_point(data = means, aes(x = RMET.score, y = mean, color = eq.ineq), shape = 19, alpha = 0.5, position = position_dodge(0.3)) +
+  scale_x_continuous(limits = c(0,29), breaks = seq(0,28,7)) +
+  scale_size_area() +
+  scale_color_manual(name = "Distribution", labels = c("Equal", "Unequal"), values = c("orange", "slategray")) +
+  scale_fill_manual(name = "Distribution", labels = c("Equal", "Unequal"), values = c("orange", "slategray")) +
+  facet_wrap(~ai.di, ncol = 2, labeller=labeller(ai.di = labels)) +
+  ylab("Predicted value (reject)") +
+  xlab("Score on the Reading the Mind in the Eyes Test") +
+  # ggtitle("Theory of Mind") +
+  guides(fill=FALSE) + ## this is how you get rid of the ribbon legend
+  theme_bw() +
+  theme(panel.spacing = unit(2, "lines"),
+        axis.text=element_text(size=16),
+        axis.title=element_text(size=18,face="bold"),
+        axis.title.y=element_text(margin=margin(r=20)),
+        axis.title.x=element_text(margin=margin(t=20)),
+        plot.title = element_text(size=18,face="bold", margin=margin(b=20), hjust=1),
+        legend.text=element_text(size=20),
+        legend.title=element_text(size=20),
+        strip.text=element_text(size=14),
+        panel.grid.major.x = element_blank(),
+        panel.grid.major.y = element_blank())
+
+```
+
+### Test whether ToM manipulation affected RMET scores
+
+```{r}
+ToM.control <- df_subset$RMET.score[which(df_subset$tom.con == 'C')]
+ToM.tom <- df_subset$RMET.score[which(df_subset$tom.con == 'ToM')]
+t.test(ToM.control, ToM.tom)
+```
+
+## Relationship Between Inequity Aversion and Griffith Empathy Measure
+
+```{r}
+print("Test the 3-way interaction: Distribution x Inequity Type x Griffith score")
+model123.Griffith.1 <- update(model123.full, . ~ . - eq.ineq:ai.di:Griffith.scaled)
+anova(model123.full, model123.Griffith.1, test="Chisq") # to test the 3-way interaction: eq.ineq:ai.di:Griffith.scaled
+
+print("Test the 2-way interaction: Distribution x Griffith score")
+model123.Griffith.2 <- update(model123.Griffith.1, . ~ . - eq.ineq:Griffith.scaled)
+anova(model123.Griffith.1, model123.Griffith.2, test="Chisq") # to test the 2-way interaction: eq.ineq:Griffith.scaled
+```
+
+### Figure 3B: Rejections by Griffith score
+
+```{r, message=FALSE, warning=FALSE}
+
+effects_Griffith <- allEffects(model123.full, xlevels = list(Griffith.scaled = seq(-3, 3, 1)))
+effects_Griffith_df <- lapply(effects_Griffith, as.data.frame)
+predicted.values.for.plot.Griffith <- effects_Griffith_df$`eq.ineq:ai.di:Griffith.scaled`
+Griffith.mean <- mean(df$Griffith, na.rm = TRUE)
+Griffith.sd <- sd(df$Griffith, na.rm = TRUE)
+
+labels <- c(AI = "Advantageous Inequity", DI = "Disadvantageous Inequity")
+
+ggplot() +
+  geom_line(data = predicted.values.for.plot.Griffith,
+            aes(x = Griffith.scaled*Griffith.sd+Griffith.mean, y = fit, color = eq.ineq),
+            size = 1.5) +
+  geom_ribbon(data = predicted.values.for.plot.Griffith,
+              aes(x = Griffith.scaled*Griffith.sd+Griffith.mean, ymin = lower, ymax = upper, fill = eq.ineq),
+              alpha = .3, linetype = 0, na.rm = TRUE) +
+  geom_point(data = means, aes(x = Griffith.score, y = mean, color = eq.ineq), shape = 19, alpha = 0.5, position = position_dodge(0.3)) +
+  scale_x_continuous(limits = c(-30,97), breaks = seq(-17,77,30)) +
+  scale_size_area() +
+  scale_color_manual(name = "Distribution", labels = c("Equal", "Unequal"), values = c("orange", "slategray")) +
+  scale_fill_manual(name = "Distribution", labels = c("Equal", "Unequal"), values = c("orange", "slategray")) +
+  facet_wrap(~ai.di, ncol = 2, labeller=labeller(ai.di = labels)) +
+  ylab("Predicted value (reject)") +
+  xlab("Score on the Griffith Empathy Measure") +
+  ggtitle("Empathy") +
+  guides(fill=FALSE) + ## this is how you get rid of the ribbon legend
+  theme_bw() +
+  theme(panel.spacing = unit(2, "lines"),
+        axis.text=element_text(size=16),
+        axis.title=element_text(size=18,face="bold"),
+        axis.title.y=element_text(margin=margin(r=20)),
+        axis.title.x=element_text(margin=margin(t=20)),
+        plot.title = element_text(size=18,face="bold", margin=margin(b=20), hjust=0.5),
+        legend.text=element_text(size=16),
+        legend.title=element_text(size=16,face="bold"),
+        strip.text=element_text(size=14),
+        panel.grid.major.x = element_blank(),
+        panel.grid.major.y = element_blank())
+
+```
+
+###  Test Interactions involving Griffith cognitive and affective subscores
+
+```{r}
+
+model123.full.g <- glmer(dec ~
+                           (eq.ineq + ai.di + tom.con + actor.age.group)^4 +
+                           (eq.ineq + ai.di + RMET.score.scaled)^3 +
+                           (eq.ineq + ai.di + Griffith_cog.scaled)^3 +
+                           (eq.ineq + ai.di + Griffith_aff.scaled)^3 +
+                           (actor.age.group + RMET.score.scaled)^2 +
+                           (actor.age.group + Griffith_cog.scaled)^2 +
+                           (actor.age.group + Griffith_aff.scaled)^2 +
+                           actor.gender +
+                           (1+eq.ineq|subject.number),
+                         data = df.long,
+                         family = binomial,
+                         control = glmerControl(optimizer = 'optimx', optCtrl = list(method = 'bobyqa'))) # methods: nlminb, bobyqa
+
+model123.full.g.1 <- update(model123.full.g, . ~ . -eq.ineq:ai.di:Griffith_cog.scaled -eq.ineq:ai.di:Griffith_aff.scaled)
+
+```
+
+#### Interactions involving Griffith cognitive subscore
+
+```{r}
+
+# remove 3-way interaction
+model.g.cog.1 <- update(model123.full.g, . ~ . - eq.ineq:ai.di:Griffith_cog.scaled)
+
+# remove 2-way interaction
+model.g.cog.2 <- update(model123.full.g.1, . ~ . - eq.ineq:Griffith_cog.scaled)
+
+print("test the 3-way interaction: eq.ineq : ai.di : Griffith_cog")
+anova(model123.full.g, model.g.cog.1, test="Chisq") 
+
+print("test the 2-way interaction: eq.ineq:Griffith_cog")
+anova(model123.full.g.1, model.g.cog.2, test="Chisq")
+```
+
+#### Interactions involving Griffith affective subscore
+
+```{r}
+
+# remove 3-way interaction
+model.g.aff.1 <- update(model123.full.g, . ~ . - eq.ineq:ai.di:Griffith_aff.scaled)
+
+# remove 2-way interaction
+model.g.aff.2 <- update(model123.full.g.1, . ~ . - eq.ineq:Griffith_aff.scaled)
+
+print("test the 3-way interaction eq.ineq : ai.di : Griffith.aff")
+anova(model123.full.g, model.g.aff.1, test="Chisq") 
+
+print("test the 2-way interaction eq.ineq : Griffith.aff")
+anova(model123.full.g.1, model.g.aff.2, test="Chisq")
+
+
+```
+
+
+# Supplementary Material
+
+## Table S1. Final sample breakdown
+
+```{r}
+
+df_subset <- subset(df, is.na(Griffith) != TRUE)
+as.matrix(by(df_subset[,c("actor.age.group", "tom.con", "ai.di", "actor.gender")], df_subset[,c("actor.age.group","ai.di", "tom.con")], count))
+
+```
+
+## Table S2. Model output from full model
+
+```{r}
+htmlreg(list(model123.full), file = "Table_S2.doc", single.row = TRUE,
+        stars = c(0.001, 0.01, 0.05, 0.10), symbol = "&#10013",
+        custom.model.names = c("Full model"),
+        custom.coef.names = c("Intercept",
+                              "Distribution",
+                              "Inequity Type",
+                              "Manipulation",
+                              "Decider Age Group",
+                              "RMET Score",
+                              "Griffith Score",
+                              "Decider Gender",
+                              "Distribution x Inequity Type",
+                              "Distribution x Manipulation",
+                              "Distribution x Decider Age Group",
+                              "Inequity Type x Manipulation",
+                              "Inequity Type x Decider Age Group",
+                              "Manipulation x Decider Age Group",
+                              "Distribution x RMET Score",
+                              "Inequity Type x RMET Score",
+                              "Distribution x Griffith Score",
+                              "Inequity Type x Griffith Score",
+                              "Decider Age Group x RMET Score",
+                              "Decider Age Group x Griffith Score",
+                              "Distribution x Inequity Type x Manipulation",
+                              "Distribution x Inequity Type x Decider Age Group",
+                              "Distribution x Manipulation x Decider Age Group",
+                              "Inequity Type x Manipulation x Decider Age Group",
+                              "Distribution x Inequity Type x RMET Score",
+                              "Distribution x Inequity Type x Griffith Score",
+                              "Distribution x Inequity Type x Manipulation x Decider Age Group"),
+        custom.gof.names = c("AIC", "BIC", "Log Likelihood", 
+                             "Num. obs. (trials)", "Num. groups: ID (subjects)",
+                             "Variance: ID (Intercept)", "Variance: ID (Distribution)",
+                             "Covariance: ID (Intercept) (Distribution)"),
+        caption.above = TRUE, 
+        caption = "Table S2. Model outputs from a reduced model that includes all the two-way interactions of interest (Distribution x Manipulation, Distribution x RMET score, Distribution x Griffith score). Estimates and standard errors (s.e.) of fixed effects in Generalized Linear Mixed Models predicting children's rejection behaviors. Baselines were set as follows: Distribution = equal, Inequity Type = AI, Manipulation = Control, Decider Age Group = 6&7, Decider Gender = female. Griffith score and RMET score were included as continuous predictors. 
+        Table also shows goodness-of-fit statistics.",
+        inline.css = FALSE, doctype = TRUE, html.tag = TRUE, 
+        head.tag = TRUE, body.tag = TRUE)
+```
+
+## Analyses with age as a continuous variable
+
+```{r}
+
+model123.cont.full <- glmer(dec ~
+                              (eq.ineq + ai.di + tom.con + actor.age.continuous.scaled)^4 +
+                              (eq.ineq + ai.di + RMET.score.scaled)^3 +
+                              (eq.ineq + ai.di + Griffith.scaled)^3 +
+                              (actor.age.continuous.scaled + RMET.score.scaled)^2 +
+                              (actor.age.continuous.scaled + Griffith.scaled)^2 +
+                              actor.gender +
+                              (1+eq.ineq|subject.number),
+                            data = df.long,
+                            family = binomial,
+                            control = glmerControl(optimizer = 'optimx', optCtrl = list(method = 'bobyqa'))) # methods: nlminb, bobyqa
+```
+
+### Interactions with ToM Manipulation
+
+```{r}
+
+print("test the 4-way interaction: eq.ineq:ai.di:tom.con:actor.age.continuous.scaled")
+model123.cont.tom.1 <- update(model123.cont.full, . ~ . - eq.ineq:ai.di:tom.con:actor.age.continuous.scaled)
+anova(model123.cont.full, model123.cont.tom.1, test="Chisq")
+
+print("test the 3-way interaction: eq.ineq:ai.di:tom.con")
+model123.cont.tom.2 <- update(model123.cont.tom.1, . ~ . - eq.ineq:ai.di:tom.con)
+anova(model123.cont.tom.1, model123.cont.tom.2, test="Chisq")
+
+print("test the 2-way interaction: eq.ineq:tom.con")
+# remove 3-way interactions involving eq.ineq*tom.con: eq.ineq * tom.con * actor.age.continuous.scaled and eq.ineq * tom.con * ai.di
+model123.cont.tom.3 <- update(model123.cont.tom.1, . ~ . - eq.ineq:tom.con:actor.age.continuous.scaled - eq.ineq:ai.di:tom.con)
+# remove the 2-way interaction: eq.ineq * tom.con
+model123.cont.tom.4 <- update(model123.cont.tom.3, . ~ . - eq.ineq:tom.con)
+anova(model123.cont.tom.3, model123.cont.tom.4, test="Chisq")
+
+```
+
+### Interactions with RMET score
+
+```{r}
+
+print("test the 3-way interaction: eq.ineq:ai.di:RMET.score.scaled")
+model123.cont.RMET.1 <- update(model123.cont.full, . ~ . - eq.ineq:ai.di:RMET.score.scaled)
+anova(model123.cont.full, model123.cont.RMET.1, test="Chisq") 
+
+print("test the 2-way interaction: eq.ineq:RMET.score.scaled")
+# remove the 2-way interaction: eq.ineq * RMET.score.scaled
+model123.cont.RMET.2 <- update(model123.cont.RMET.1, . ~ . - eq.ineq:RMET.score.scaled)
+anova(model123.cont.RMET.1, model123.cont.RMET.2, test="Chisq")
+
+```
+
+### Interactions with Griffith score
+
+```{r}
+
+print("test the 3-way interaction: eq.ineq:ai.di:Griffith.scaled")
+model123.cont.Griffith.1 <- update(model123.cont.full, . ~ . - eq.ineq:ai.di:Griffith.scaled)
+anova(model123.cont.full, model123.cont.Griffith.1, test="Chisq")
+
+print("test the 2-way interaction: eq.ineq:Griffith.scaled")
+model123.cont.Griffith.2 <- update(model123.cont.Griffith.1, . ~ . - eq.ineq:Griffith.scaled)
+anova(model123.cont.Griffith.1, model123.cont.Griffith.2, test="Chisq")
+```
+
+## Comparing ToM and Control conditions to baseline
+
+### Establishing baseline pattern with old dataset
+
+```{r}
+
+model.pub <- glmer(rej ~
+                     (dist + inequity + age.group)^3 +
+                     actor.gender +
+                     (1+dist|actor.id),
+                   data = df.pub.long,
+                   family = binomial,
+                   control = glmerControl(optimizer = 'optimx', optCtrl = list(method = 'nlminb'))) # methods: nlminb, bobyqa
+
+drop1(model.pub, test="Chisq")
+
+lsmeans(model.pub, list(pairwise ~ dist | age.group * inequity), adjust = "mvt")
+
+```
+
+### Testing whether our manipulations in the present study match the baseline
+
+##### Control condition
+
+```{r}
+
+df.long.c <- subset(df.long, tom.con == "C")
+
+model123.c.1 <- glmer(dec ~
+                        (eq.ineq + ai.di + actor.age.group)^3 +
+                        actor.gender +
+                        (eq.ineq |subject.number),
+                      data = df.long.c,
+                      family = binomial,
+                      control = glmerControl(optimizer = 'optimx', optCtrl = list(method = 'bobyqa'))) # methods: nlminb, bobyqa
+
+drop1(model123.c.1, test="Chisq")
+
+model123.c.2 <- update(model123.c.1, . ~ . -eq.ineq:ai.di:actor.age.group)
+drop1(model123.c.2, test="Chisq")
+
+lsmeans(model123.c.2, list(pairwise ~ eq.ineq | ai.di), adjust = "tukey")
+
+```
+
+##### Comparing Control condition to baseline
+
+```{r}
+
+df.all.ai.67 <- subset(df.all, age.group == "6&7" & inequity == "AI" & tom.con != "ToM")
+df.all.ai.67 <- droplevels(df.all.ai.67)
+
+model.ai.67 <- glmer(rej ~
+                       dist*tom.con +
+                       actor.gender +
+                       (1 + dist |actor.id),
+                     data = df.all.ai.67,
+                     family = binomial,
+                     control = glmerControl(optimizer = 'optimx', optCtrl = list(method = 'bobyqa'))) # methods: nlminb, bobyqa
+
+lsmeans(model.ai.67, list(pairwise ~ tom.con | dist), adjust = "mvt")
+
+```
+
+##### ToM condition
+
+```{r}
+
+df.long.tom <- subset(df.long, tom.con == "ToM")
+
+model123.tom.1 <- glmer(dec ~
+                          (eq.ineq + ai.di + actor.age.group)^3 +
+                          actor.gender +
+                          (eq.ineq |subject.number),
+                        data = df.long.tom,
+                        family = binomial,
+                        control = glmerControl(optimizer = 'optimx', optCtrl = list(method = 'bobyqa'))) # methods: nlminb, bobyqa
+
+drop1(model123.tom.1, test="Chisq")
+
+lsmeans(model123.tom.1, list(pairwise ~ eq.ineq | ai.di * actor.age.group), adjust = "tukey")
+
+model123.tom.2 <- update(model123.tom.1, . ~ . -eq.ineq:ai.di:actor.age.group)
+drop1(model123.tom.2, test="Chisq")
+
+lsmeans(model123.tom.2, list(pairwise ~ eq.ineq | ai.di), adjust = "tukey")
+
+model123.tom.3 <- update(model123.tom.2, . ~ . -eq.ineq:ai.di - eq.ineq:actor.age.group)
+drop1(model123.tom.3, test="Chisq")
+
+```
+
+
+
+## Interactions with RMET score with a larger sample
+
+```{r}
+
+model156.tom.1 <- glmer(dec ~
+                         eq.ineq +
+                         ai.di +
+                         tom.con +
+                         actor.age.group +
+                         RMET.score.scaled +
+                         actor.gender +
+                         eq.ineq:ai.di +
+                         eq.ineq:tom.con +
+                         eq.ineq:RMET.score.scaled +
+                         actor.age.group:RMET.score.scaled +
+                         eq.ineq:ai.di:RMET.score.scaled +
+                         (1+eq.ineq|subject.number),
+                       data = df.long,
+                       family = binomial,
+                       control = glmerControl(optimizer = 'optimx', optCtrl = list(method = 'bobyqa'))) # methods: nlminb, bobyqas
+
+print("*** Test interactions with RMET ***")
+
+# remove the 3-way interaction: eq.ineq : ai.di : RMET.score.scaled
+model156.RMET.1 <- update(model156.tom.1, . ~ . - eq.ineq:ai.di:RMET.score.scaled)
+
+# remove the 2-way interaction: eq.ineq : RMET.score.scaled
+model156.RMET.2 <- update(model156.RMET.1, . ~ . - eq.ineq:RMET.score.scaled)
+
+print("test the 3-way interaction: eq.ineq : ai.di : RMET.score.scaled")
+anova(model156.tom.1, model156.RMET.1, test="Chisq")
+
+print("test the 2-way interaction: eq.ineq:RMET.score.scaled")
+anova(model156.RMET.1, model156.RMET.2, test="Chisq")
+
+```
+
+#### Treating age as a continuous variable
+
+```{r}
+
+model156.cont.full <- glmer(dec ~
+                              eq.ineq +
+                              ai.di +
+                              tom.con +
+                              actor.age.continuous.scaled +
+                              RMET.score.scaled +
+                              actor.gender +
+                              eq.ineq:ai.di +
+                              eq.ineq:tom.con +
+                              eq.ineq:RMET.score.scaled +
+                              actor.age.continuous.scaled:RMET.score.scaled +
+                              eq.ineq:ai.di:RMET.score.scaled +
+                              (1+eq.ineq|subject.number),
+                            data = df.long,
+                            family = binomial,
+                            control = glmerControl(optimizer = 'optimx', optCtrl = list(method = 'bobyqa'))) # methods: nlminb, bobyqa
+
+print("*** Test interactions with RMET ***")
+
+# remove the 3-way interaction: eq.ineq : ai.di : RMET.score.scaled
+model156.RMET.1 <- update(model156.cont.full, . ~ . - eq.ineq:ai.di:RMET.score.scaled)
+
+# remove the 2-way interaction: eq.ineq : RMET.score.scaled
+model156.RMET.2 <- update(model156.RMET.1, . ~ . - eq.ineq:RMET.score.scaled)
+
+print("test the 3-way interaction: eq.ineq : ai.di : RMET.score.scaled")
+anova(model156.cont.full, model156.RMET.1, test="Chisq")
+
+print("test the 2-way interaction: eq.ineq:RMET.score.scaled")
+anova(model156.RMET.1, model156.RMET.2, test="Chisq")
+
+```
+
+#### Figure S1: Rejections by RMET score 
+
+```{r, message=FALSE, warning=FALSE}
+
+# means are used to plot raw data values
+attach(df.long)
+means <- setNames(aggregate(dec, by = list(subject.number,ai.di,eq.ineq,tom.con), FUN = mean, na.rm = TRUE),
+                  c("subject.number","ai.di","eq.ineq","tom.con","mean"))
+RMET.scores <- setNames(aggregate(RMET.score, by = list(subject.number,ai.di,eq.ineq,tom.con),FUN = mean, na.rm = TRUE),
+                        c("subject.number","ai.di","eq.ineq","tom.con","RMET.score"))
+means$RMET.score <- RMET.scores$RMET.score
+detach(df.long)
+
+effects_RMET <- allEffects(model156.tom.1, xlevels = list(RMET.score.scaled = seq(-4, 3, 0.3)))
+effects_RMET_df <- lapply(effects_RMET, as.data.frame)
+predicted.values.for.plot.RMET <- effects_RMET_df$`eq.ineq:ai.di:RMET.score.scaled`
+# str(predicted.values.for.plot.RMET)
+
+RMET.mean <- mean(df$RMET.score, na.rm = TRUE)
+RMET.sd <- sd(df$RMET.score, na.rm = TRUE)
+
+labels <- c(AI = "Advantageous Inequity", DI = "Disadvantageous Inequity")
+
+ggplot() +
+  geom_line(data = predicted.values.for.plot.RMET,
+            aes(x = RMET.score.scaled*RMET.sd+RMET.mean, y = fit, color = eq.ineq),
+            size = 1.5) +
+  geom_ribbon(data = predicted.values.for.plot.RMET,
+              aes(x = RMET.score.scaled*RMET.sd+RMET.mean, ymin = lower, ymax = upper, fill = eq.ineq),
+              alpha = .3, linetype = 0) +
+  geom_point(data = means, aes(x = RMET.score, y = mean, color = eq.ineq), shape = 19, alpha = 0.5, position = position_dodge(0.3)) +
+  scale_x_continuous(limits = c(0,29), breaks = seq(0,28,7)) +
+  scale_size_area() +
+  scale_color_manual(name = "Distribution", labels = c("Equal", "Unequal"), values = c("#F8766D", "#00BFC4")) +
+  facet_wrap(~ai.di, ncol = 2, labeller=labeller(ai.di = labels)) +
+  ylab("Predicted value (reject)") +
+  xlab("Score on the Reading the Mind in the Eyes Test") +
+  guides(fill=FALSE) + ## this is how you get rid of the ribbon legend
+  theme_bw() +
+  theme(panel.spacing = unit(2, "lines"),
+        axis.text=element_text(size=16),
+        axis.title=element_text(size=18,face="bold"),
+        axis.title.y=element_text(margin=margin(r=20)),
+        axis.title.x=element_text(margin=margin(t=20)),
+        legend.text=element_text(size=16),
+        legend.title=element_text(size=16,face="bold"),
+        strip.text=element_text(size=14),
+        panel.grid.major.x = element_blank(),
+        panel.grid.major.y = element_blank())
+```
+
+#### Table S3. Model output from reduced model
+
+```{r}
+
+model156.red <- glmer(dec ~
+                        (eq.ineq + ai.di + RMET.score.scaled)^3 +
+                        (actor.age.group + RMET.score.scaled)^2 +
+                        (1+eq.ineq|subject.number),
+                      data = df.long,
+                      family = binomial,
+                      control = glmerControl(optimizer = 'optimx', optCtrl = list(method = 'bobyqa'))) # methods: nlminb, bobyqa
+
+htmlreg(list(model156.red), file = "Table_S3.doc", single.row = TRUE,
+        stars = c(0.001, 0.01, 0.05, 0.10), symbol = "&#10013",
+        custom.model.names = c("Model"),
+        custom.coef.names = c("Intercept",
+                              "Distribution",
+                              "Inequity Type",
+                              "RMET Score",
+                              "Decider Age Group",
+                              "Distribution x Inequity Type",
+                              "Distribution x RMET Score",
+                              "Inequity Type x RMET Score",
+                              "Decider Age Group x RMET Score",
+                              "Distribution x Inequity Type x RMET Score"),
+        custom.gof.names = c("AIC", "BIC", "Log Likelihood", 
+                             "Num. obs. (trials)", "Num. groups: ID (subjects)",
+                             "Variance: ID (Intercept)", "Variance: ID (Distribution)",
+                             "Covariance: ID (Intercept) (Distribution)"),
+        caption.above = TRUE, 
+        caption = "Table S3. Model outputs from a reduced model (N=156) that includes all the interactions of interest related to RMET score (Distribution x RMET score, Distribution x Inequity Type x RMET score). Estimates and standard errors (s.e.) of fixed effects in Generalized Linear Mixed Models predicting children's rejection behaviors. Baselines were set as follows: Distribution = equal, Inequity Type = AI, Decider Age Group = 6&7. RMET score was included as a continuous predictor. 
+        Table also shows goodness-of-fit statistics.",
+        inline.css = FALSE, doctype = TRUE, html.tag = TRUE, 
+        head.tag = TRUE, body.tag = TRUE)
+```
+
+
+## Relationship between RMET and Griffith
+
+```{r}
+cor.test(df$Griffith.scaled, df$RMET.score.scaled)
+cor.test(df$Griffith_aff.scaled, df$RMET.score.scaled)
+cor.test(df$Griffith_cog.scaled, df$RMET.score.scaled)
+
+```
+
+## RMET and Griffith combined score
+
+```{r}
+
+model123.full.comb <- glmer(dec ~
+                              (eq.ineq + ai.di + tom.con + actor.age.group)^4 +
+                              (eq.ineq + ai.di + RMET_Griffith)^3 +
+                              (actor.age.group + RMET_Griffith)^2 +
+                              actor.gender +
+                              (1+eq.ineq|subject.number),
+                            data = df.long,
+                            family = binomial,
+                            control = glmerControl(optimizer = 'optimx', optCtrl = list(method = 'nlminb'))) # methods: nlminb, bobyqa
+drop1(model123.full.comb, test="Chisq")
+
+model123.full.comb.1 <- update(model123.full.comb, . ~ . -eq.ineq:ai.di:RMET_Griffith)
+drop1(model123.full.comb.1, test="Chisq")
+
+```
+
+### Treating age as a continuous variable
+
+```{r}
+
+model123.full.comb.cont <- glmer(dec ~
+                                   (eq.ineq + ai.di + tom.con + actor.age.continuous.scaled)^4 +
+                                   (eq.ineq + ai.di + RMET_Griffith)^3 +
+                                   (actor.age.continuous.scaled + RMET_Griffith)^2 +
+                                   actor.gender +
+                                   (1+eq.ineq|subject.number),
+                                 data = df.long,
+                                 family = binomial,
+                                 control = glmerControl(optimizer = 'optimx', optCtrl = list(method = 'nlminb'))) # methods: nlminb, bobyqa
+drop1(model123.full.comb.cont, test="Chisq")
+
+model123.full.comb.cont.1 <- update(model123.full.comb.cont, . ~ . -eq.ineq:ai.di:RMET_Griffith)
+drop1(model123.full.comb.cont.1, test="Chisq")
+```
